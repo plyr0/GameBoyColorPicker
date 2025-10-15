@@ -1,5 +1,5 @@
 # Game Boy Color Picker
-![Game Boy Color Picker showing values in HTML color code hexidecimal](/docs/hex.png) ![Game Boy Color Picker showing values in decimal](/docs/decimal.png)
+![Game Boy Color Picker showing values on CGB](/docs/cgb.png.png) ![Game Boy Color Picker showing values on SGB](/docs/sgb.png.png)
 
 A color picker that runs on Super Game Boy, Game Boy Color, and Game Boy Advance.
 
@@ -12,7 +12,7 @@ Controls are:
 * Up and Down change them with the effect immediately visible.
 * A sets a component to the maximum, saving the previous value which can be restored with another button press.
 * B sets a component to the minimum, similar to A.
-* Select switches between HTML color code display and decimal display of colors.
+* Select randomizes colors.
 
 The selected palette is saved to the beginning of SRAM so your `GBColorPicker.sav` file can be used by programs that read binary GBC palettes. The first eight bytes are also continuously checked against the active colors and reloaded if any difference is found so palettes can be pasted directly into an emulator's memory.
 

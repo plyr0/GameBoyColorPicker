@@ -1,0 +1,14 @@
+{
+    "makefile.configurations": [
+    {
+        "name": "Default",
+        "makeArgs": ["-j4"]
+    },
+    {
+        "name": "Clean",
+        "makeArgs": ["clean"]
+    }],
+
+    "files.associations": {
+    }
+}

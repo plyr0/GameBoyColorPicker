@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "gameboy",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/../../../../../../../gb/gbdk/include/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "__PORT_sm83",
+                "__TARGET_gb"
+            ],
+            "compilerPath": "",
+            "cStandard": "c11",
+            "intelliSenseMode": "${default}",
+            "compilerArgs": [],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}

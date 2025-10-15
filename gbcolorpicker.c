@@ -6,23 +6,24 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <rand.h>
+#include <time.h>
 
 #define PALETTE_COLOR_1 0U
 #define PALETTE_COLOR_2 1U
 #define PALETTE_COLOR_3 2U
 #define PALETTE_COLOR_4 3U
 
-#define TILE_ID_HIGHLIGHT1 0x66U
-#define TILE_ID_HIGHLIGHT2 0x67U
-#define TILE_ID_TOPNORMAL 0x68U
-#define TILE_ID_TOPINVERT 0x69U
-#define TILE_ID_COLOR 0x6aU
+#define TILE_ID_COLOR 0x66U
+#define TILE_ID_MARKER 0x67U
 
 typedef uint8_t uint5_t;
 #define UINT5_MIN (0x00U)
 #define UINT5_MAX (0x1fU)
 
-// Turns a five bit color value into an eight bit color value by repeating the three most significant bits in the three least.
+// Turns a five bit color value into an eight bit color value by repeating the
+// three most significant bits in the three least.
+// TODO: wouldn't be enough ((byte) << 3))
 #define EXTEND(byte) ((byte) << 3) | ((byte) >> 2)
 
 // Set default colors
@@ -34,6 +35,29 @@ uint5_t colors[4][3] = {
 };
 
 palette_color_t raw_colors[4];
+
+void adjust_text_backgrounds (void)
+{
+    // text backgrounds same as bg rects colors
+	set_bkg_palette_entry(0, 0, RGB(colors[0][0], colors[0][1], colors[0][2]));
+	set_bkg_palette_entry(1, 0, RGB(colors[1][0], colors[1][1], colors[1][2]));
+	set_bkg_palette_entry(2, 0, RGB(colors[2][0], colors[2][1], colors[2][2]));
+	set_bkg_palette_entry(3, 0, RGB(colors[3][0], colors[3][1], colors[3][2]));
+
+    //TODO font with bg 3rd color
+    set_bkg_palette_entry(0, 2, RGB(colors[0][0], colors[0][1], colors[0][2]));
+	set_bkg_palette_entry(1, 2, RGB(colors[1][0], colors[1][1], colors[1][2]));
+	set_bkg_palette_entry(2, 2, RGB(colors[2][0], colors[2][1], colors[2][2]));
+	set_bkg_palette_entry(3, 2, RGB(colors[3][0], colors[3][1], colors[3][2]));
+}
+
+// return black if background color is light, white otherwise
+uint16_t text_color (uint8_t bg)
+{
+	// https://stackoverflow.com/a/946734
+	const uint16_t gray = colors[bg][0] * 10 / 3 + colors[bg][1] * 10 / 6 + colors[bg][2] / 10;
+	return (gray > 23 ? RGB_BLACK : RGB_WHITE); // 186/256, is like 23/32(5bit)
+}
 
 // Load a palette of four colors into the raw_colors array and the colors array.
 void loadColorsFromPalette(palette_color_t * palette)
@@ -59,9 +83,9 @@ void wait(uint8_t frames)
 uint8_t hex(const uint8_t nibble)
 {
     if (nibble < 10) {
-        return (nibble + 0x10);
+        return (nibble + 0x10); // 16th tile zero '0'
     } else {
-        return (nibble - 10 + 0x41);
+        return (nibble - 10 + 0x41); // 321st tile 'a'
     }
 }
 
@@ -82,53 +106,6 @@ void show_hex_byte_xy(const uint8_t x, const uint8_t y, const uint8_t byte)
 
     digit = hex(byte & 0x0f);
     set_tile_xy(x+1, y, digit);
-
-    // The font goes to the very top of the tile, so add a one px line across the top.
-    set_tile_xy(x, y-1, TILE_ID_TOPNORMAL);
-    set_tile_xy(x+1, y-1, TILE_ID_TOPNORMAL);
-}
-
-// A highlighted tile is displayed inverted.
-// To do this a copy is needed.
-void transfer_highlighted_tile(const uint8_t src, const uint8_t dst)
-{
-    static uint8_t i, v;
-    static uint8_t *p, *q;
-
-    p = _VRAM9000 + 0x10 * src;
-    q = _VRAM9000 + 0x10 * dst;
-
-    for (i = 0; i < 0x10; i += 1) {
-      v = get_vram_byte(p + i);
-      set_vram_byte(q + i, ~v);
-      i += 1;
-      v = get_vram_byte(p + i);
-      set_vram_byte(q + i, ~v);
-    }
-}
-
-// Show a byte in hexadecimal at the given coordinate and the one to its right.
-// It will be inverted showing as white digits on a black background.
-void show_hex_byte_xy_highlighted(const uint8_t x, const uint8_t y, const uint8_t byte)
-{
-    static uint8_t digit;
-    static uint8_t i, b;
-    static uint8_t *p, *q;
-
-    // Create highlighted tiles for the two digits that need to be displayed
-    digit = hex((byte >> 4) & 0x0f);
-    transfer_highlighted_tile(digit, TILE_ID_HIGHLIGHT1);
-
-    digit = hex(byte & 0x0f);
-    transfer_highlighted_tile(digit, TILE_ID_HIGHLIGHT2);
-
-    // Use the tiles that were just created
-    set_tile_xy(x, y, TILE_ID_HIGHLIGHT1);
-    set_tile_xy(x+1, y, TILE_ID_HIGHLIGHT2);
-
-    // The font goes to the very top of the tile, so add a one px line across the top.
-    set_tile_xy(x, y-1, TILE_ID_TOPINVERT);
-    set_tile_xy(x+1, y-1, TILE_ID_TOPINVERT);
 }
         
 // Print the passed in color formatted as a CGB 15 bit color.
@@ -141,9 +118,10 @@ inline void print_raw(const uint8_t x, const uint8_t y, const palette_color_t ra
 // Print the passed in color formatted as an HTML color code.
 inline void print_html(const uint8_t x, const uint8_t y, const uint8_t *p)
 {
-    show_hex_byte_xy(x+0, y, EXTEND(p[0]));
-    show_hex_byte_xy(x+2, y, EXTEND(p[1]));
-    show_hex_byte_xy(x+4, y, EXTEND(p[2]));
+	set_tile_xy(x, y, 3); // #
+    show_hex_byte_xy(x+1, y, EXTEND(p[0]));
+    show_hex_byte_xy(x+3, y, EXTEND(p[1]));
+    show_hex_byte_xy(x+5, y, EXTEND(p[2]));
 }
 
 // Print the passed in color formatted as decimal R, G, B.
@@ -172,22 +150,16 @@ inline void print_decimal(const uint8_t x, const uint8_t y, const uint8_t *p)
         // Ones place
         set_tile_xy(x+3, y+i, hex(bcd & 0x0f));
     }
-
-    // The font goes to the very top of the tile, so add a one px line across the top.
-    set_tile_xy(x, y-1, TILE_ID_TOPNORMAL);
-    set_tile_xy(x+1, y-1, TILE_ID_TOPNORMAL);
-    set_tile_xy(x+2, y-1, TILE_ID_TOPNORMAL);
-    set_tile_xy(x+3, y-1, TILE_ID_TOPNORMAL);
 }
 
 // Print the build date.
-void print_date()
+void print_date(void)
 {
     gotoxy(5,16);
-    puts("2025-08-15");
+    puts("2025-10-15");
 }
 
-void main()
+void main(void)
 {
     // SRAM is used to save the selected palette.
     static palette_color_t * const sram = (palette_color_t *)_SRAM;
@@ -206,19 +178,20 @@ void main()
     };
 
     // Font tiles are loaded in by GBDK. That is most of what is needed, but there are a few more to load.
-    static const uint8_t const toptile_invert[] = {0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0xff};
-    static const uint8_t const toptile[] = {0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0, 0xff};
     static const uint8_t const colortile[] = {0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0};
-
+    static const unsigned char markertile[] = {0x10,0x10,0x18,0x18,0x1C,0x1C,0x1E,0x1E,0x1C,0x1C,0x18,0x18,0x10,0x10,0x00,0x00};
     // Locations for the different info to print.
-    static const uint8_t const loc_x[] = {1, 11, 1, 11};
-    static const uint8_t const loc_y[] = {1, 1, 16, 16};
-    static const uint8_t const raw_loc_x[] = {3, 13, 3, 13};
-    static const uint8_t const raw_loc_y[] = {5, 5, 12, 12};
-    static const uint8_t const html_loc_x[] = {2, 12, 2, 12};
-    static const uint8_t const html_loc_y[] = {3, 3, 14, 14};
-    static const uint8_t const decimal_loc_x[] = {3, 13, 3, 13};
-    static const uint8_t const decimal_loc_y[] = {3, 3, 12, 12};
+    static const uint8_t const loc_x[] = {1, 11, 1, 11}; //hex rgb components
+    static const uint8_t const loc_y[] = {1, 1, 10, 10};
+    static const uint8_t const raw_loc_x[] = {3, 13, 3, 13}; // 15 bit GBC color
+    static const uint8_t const raw_loc_y[] = {2, 2, 11, 11};
+    static const uint8_t const html_loc_x[] = {1, 11, 1, 11}; // web #012ABC
+    static const uint8_t const html_loc_y[] = {7, 7, 16, 16};
+    static const uint8_t const decimal_loc_x[] = {3, 13, 3, 13}; // rgb decimal
+    static const uint8_t const decimal_loc_y[] = {4, 4, 13, 13};
+    
+    static const uint8_t const marker_loc_x[4][3] = {{0, 3, 6}, {10, 13, 16}, {0, 3, 6}, {10, 13, 16}};
+    static const uint8_t const marker_loc_y[4] = {1, 1, 10, 10};
 
     static uint8_t selected_color, selected_component;
     static uint8_t new_buttons, old_buttons;
@@ -233,12 +206,9 @@ void main()
     // Used to save/restore the selected value when pressing A or B.
     static uint5_t backup_component;
 
-    // Load a couple tiles so the top of numbers do not touch the colors
-    set_bkg_data(TILE_ID_TOPNORMAL, 1, toptile);
-    set_bkg_data(TILE_ID_TOPINVERT, 1, toptile_invert);
-    // Load a tile of solid color 1 for the background to avoid the SGB shared color.
+	// Load a tile of solid color 1 for the background to avoid the SGB shared color.
     set_bkg_data(TILE_ID_COLOR, 1, colortile);
-
+    set_bkg_data(TILE_ID_MARKER, 1, markertile);
 
     // Turn everything on. Sprites are not used.
     SHOW_BKG;
@@ -257,12 +227,10 @@ void main()
         return;
     }
 
-    // The four color palettes are mostly setup by the color picker its self, but they need black and white for text
-    for (i = PALETTE_COLOR_1; i <= PALETTE_COLOR_4; i++) {
-        set_bkg_palette_entry(i, 2, RGB_WHITE);
-        set_bkg_palette_entry(i, 3, RGB_BLACK);
-    }
-
+    // Start menu black text on white bg
+    set_bkg_palette_entry(0, 2, RGB_WHITE);
+    set_bkg_palette_entry(0, 3, RGB_BLACK);
+    
     // Check whether SRAM is valid
     ENABLE_RAM;
     if (sram[0] != 0xffff) {
@@ -272,7 +240,7 @@ void main()
     DISABLE_RAM;
 
     // Display title and usage
-    puts("\n  GB Color Picker\n  ---------------\n\n Use left/right to\n choose a component\n and up/down to\n change it.\n\n A and B toggle\n min, max and back.\n\n Select switches\n between hex and\n decimal colors.");
+    puts("\n  GB Color Picker\n  ---------------\n\n Use left/right to\n choose a component\n and up/down to\n change it.\n\n A and B toggle\n min, max and back.\n\n Select randomizes.");
     print_date();
     do {
       wait(1);
@@ -281,6 +249,15 @@ void main()
 
     // clear screen.
     cls();
+
+    initrand(clock());
+    
+    adjust_text_backgrounds();
+    // adjust text color
+	set_bkg_palette_entry(0, 3, text_color(0));
+	set_bkg_palette_entry(1, 3, text_color(1));
+	set_bkg_palette_entry(2, 3, text_color(2));
+	set_bkg_palette_entry(3, 3, text_color(3));
 
     // Initialize color areas. Each quadrant of the screen gets a different palette.
     if (sgb) {
@@ -299,6 +276,10 @@ void main()
     // Fill everything with the tile that will show the selected colors.
     fill_rect( 0, 0, 20, 18, TILE_ID_COLOR);
 
+    // marker at color 1 component 1(red)
+    set_tile_xy(marker_loc_x[selected_color][selected_component], 
+                marker_loc_y[selected_color], TILE_ID_MARKER);
+
     // Init the backup component.
     backup_component = colors[selected_color][selected_component];
 
@@ -308,27 +289,23 @@ void main()
         for (i = 0; i < 4; i++) {
             // Calculate the GBC 15 bit blue-green-red ordered color
             raw_colors[i] = RGB(colors[i][0], colors[i][1], colors[i][2]);
+		
+			// Display the hex value of the newly calculated color
+			print_raw(raw_loc_x[i], raw_loc_y[i], raw_colors[i]);
 
-            if (mode == 0) {
-                // Display the hex value of the newly calculated color
-                print_raw(raw_loc_x[i], raw_loc_y[i], raw_colors[i]);
-
-                // Display it formatted as a 24 bit red-green-blue ordered hex value, like the commonly used HTML color codes
-                print_html(html_loc_x[i], html_loc_y[i], colors[i]);
-            } else {
-                // Display it formatted as decimal components
-                print_decimal(decimal_loc_x[i], decimal_loc_y[i], colors[i]);
-            }
+			// Display it formatted as a 24 bit red-green-blue ordered hex value, like the commonly used HTML color codes
+			print_html(html_loc_x[i], html_loc_y[i], colors[i]);
+		
+			// Display it formatted as decimal components
+			print_decimal(decimal_loc_x[i], decimal_loc_y[i], colors[i]);            
 
             // Display it as three separate 5 bit hex formatted components
             for (j = 0; j < 3; j++) {
-                if ((i == selected_color) && (j == selected_component)) {
-                    // If it is the selected component, give it a special palette
-                    show_hex_byte_xy_highlighted(loc_x[i] + 3 * j, loc_y[i], colors[i][j]);
-                } else {
-                    show_hex_byte_xy(loc_x[i] + 3 * j, loc_y[i], colors[i][j]);
-                }
+                show_hex_byte_xy(loc_x[i] + 3 * j, loc_y[i], colors[i][j]);
             }
+			
+			// text color
+			set_bkg_palette_entry(i, 3, text_color(i));
         }
 
         if (color_changed_selected || color_changed_all) {
@@ -364,9 +341,11 @@ void main()
                     set_bkg_palette_entry(PALETTE_COLOR_3, 1, raw_colors[2]);
                     set_bkg_palette_entry(PALETTE_COLOR_4, 1, raw_colors[3]);
                 } else {
-                    // Set the newly calculated color into the second entry of a palette.
-                    // Using the second entry because of SGB transparency.
+                    // Set the newly calculated color into the first and second entries of a palette.
+                    // Using the second entry because of SGB transparency. First for the text background.
                     set_bkg_palette_entry(PALETTE_COLOR_1 + selected_color, 1, raw_colors[selected_color]);
+					set_bkg_palette_entry(PALETTE_COLOR_1 + selected_color, 0, raw_colors[selected_color]);
+                    // TODO: SGB 3rd color bg font, set_bkg_palette_entry(PALETTE_COLOR_1 + selected_color, 2, raw_colors[selected_color]);
                 }
             }
         }
@@ -400,10 +379,13 @@ void main()
             // Check if SRAM has changed and if so, reload.
             // This is useful in an emulator for pasting palettes into memory directly.
             ENABLE_RAM;
-            for (i = 0; i < 4; i++) {
-                if (sram[i] != raw_colors[i]) {
+            for (i = 0; i < 4; i++) 
+            {
+                if (sram[i] != raw_colors[i]) 
+                {
                     color_changed_all = true;
                     color_changed_selected = true;
+                    break;
                 }
             }
             if (color_changed_all) {
@@ -416,8 +398,11 @@ void main()
         switch (new_buttons) {
             case J_LEFT:
             // De-select the current component
-            show_hex_byte_xy(loc_x[selected_color] + 3 * selected_component, loc_y[selected_color], colors[selected_color][selected_component]);
-
+            show_hex_byte_xy(loc_x[selected_color] + 3 * selected_component, 
+                loc_y[selected_color], colors[selected_color][selected_component]);
+            set_tile_xy(marker_loc_x[selected_color][selected_component], 
+                marker_loc_y[selected_color], TILE_ID_COLOR);
+            
             // Cycle to select the previous color component or color
             if (selected_component > 0) {
                 selected_component -= 1;
@@ -429,10 +414,11 @@ void main()
                     selected_color = 3;
                 }
             }
-
+            
             // Highlight the new component
-            show_hex_byte_xy_highlighted(loc_x[selected_color] + 3 * selected_component, loc_y[selected_color], colors[selected_color][selected_component]);
-
+            set_tile_xy(marker_loc_x[selected_color][selected_component], 
+                marker_loc_y[selected_color], TILE_ID_MARKER);
+            
             // Set the backup component.
             backup_component = colors[selected_color][selected_component];
 
@@ -443,6 +429,8 @@ void main()
             case J_RIGHT:
             // De-select the current component
             show_hex_byte_xy(loc_x[selected_color] + 3 * selected_component, loc_y[selected_color], colors[selected_color][selected_component]);
+            set_tile_xy(marker_loc_x[selected_color][selected_component], 
+                marker_loc_y[selected_color], TILE_ID_COLOR);
 
             // Cycle to select the previous color component or color
             if (selected_component < 2) {
@@ -457,7 +445,8 @@ void main()
             }
 
             // Highlight the new component
-            show_hex_byte_xy_highlighted(loc_x[selected_color] + 3 * selected_component, loc_y[selected_color], colors[selected_color][selected_component]);
+            set_tile_xy(marker_loc_x[selected_color][selected_component], 
+                marker_loc_y[selected_color], TILE_ID_MARKER);
 
             // Set the backup component.
             backup_component = colors[selected_color][selected_component];
@@ -505,24 +494,19 @@ void main()
             break;
 
             case J_SELECT:
-            // Switch what is displayed
-            if (mode == 1) {
-                mode = 0;
-            } else {
-                mode += 1;
-            }
-            // Clear upper left
-            fill_rect(2, 2, 6, 4, TILE_ID_COLOR);
+                // Randomize colors, randw doesn't randomize MSB
+				palette_color_t rand_pal[4] = {
+                    (rand() | rand() << 8),
+                    (rand() | rand() << 8),
+                    (rand() | rand() << 8),
+                    (rand() | rand() << 8),
+				};
 
-            // Clear upper right
-            fill_rect(12, 2, 6, 4, TILE_ID_COLOR);
+                loadColorsFromPalette(rand_pal);
+				adjust_text_backgrounds();
 
-            // Clear lower left
-            fill_rect(2, 11, 6, 4, TILE_ID_COLOR);
-
-            // Clear lower right
-            fill_rect(12, 11, 6, 4, TILE_ID_COLOR);
-
+				color_changed_all = true;
+				color_changed_selected = true;
             break;
         }
     }
