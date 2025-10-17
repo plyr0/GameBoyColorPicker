@@ -1,5 +1,5 @@
 # Game Boy Color Picker
-![Game Boy Color Picker showing values on CGB](/docs/cgb.png) ![Game Boy Color Picker showing values on SGB](/docs/sgb.png)
+![Game Boy Color Picker showing values on CGB](/docs/cgb.png)
 
 A color picker that runs on Super Game Boy, Game Boy Color, and Game Boy Advance.
 

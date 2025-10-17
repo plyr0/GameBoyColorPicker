@@ -12,6 +12,9 @@ The selected palette is saved to the beginning of SRAM so your `GBColorPicker.sa
 
 Game Boy Color Picker is written in C and compiles with GBDK. Source code is available at https://github.com/xenophile127/GameBoyColorPicker
 
+Changes in 2025-10-17:
+* "Transparent" text background also on SGB.
+
 Changes in 2025-10-15:
 * All data onscreen, no modes.
 * Select randomizes all colors.

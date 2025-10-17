@@ -9,12 +9,14 @@
 #include <rand.h>
 #include <time.h>
 
+#include "font.h"
+
 #define PALETTE_COLOR_1 0U
 #define PALETTE_COLOR_2 1U
 #define PALETTE_COLOR_3 2U
 #define PALETTE_COLOR_4 3U
 
-#define TILE_ID_COLOR 0x66U
+#define TILE_ID_COLOR 0x0U
 #define TILE_ID_MARKER 0x67U
 
 typedef uint8_t uint5_t;
@@ -35,21 +37,6 @@ uint5_t colors[4][3] = {
 };
 
 palette_color_t raw_colors[4];
-
-void adjust_text_backgrounds (void)
-{
-    // text backgrounds same as bg rects colors
-	set_bkg_palette_entry(0, 0, RGB(colors[0][0], colors[0][1], colors[0][2]));
-	set_bkg_palette_entry(1, 0, RGB(colors[1][0], colors[1][1], colors[1][2]));
-	set_bkg_palette_entry(2, 0, RGB(colors[2][0], colors[2][1], colors[2][2]));
-	set_bkg_palette_entry(3, 0, RGB(colors[3][0], colors[3][1], colors[3][2]));
-
-    //TODO font with bg 3rd color
-    set_bkg_palette_entry(0, 2, RGB(colors[0][0], colors[0][1], colors[0][2]));
-	set_bkg_palette_entry(1, 2, RGB(colors[1][0], colors[1][1], colors[1][2]));
-	set_bkg_palette_entry(2, 2, RGB(colors[2][0], colors[2][1], colors[2][2]));
-	set_bkg_palette_entry(3, 2, RGB(colors[3][0], colors[3][1], colors[3][2]));
-}
 
 // return black if background color is light, white otherwise
 uint16_t text_color (uint8_t bg)
@@ -156,7 +143,7 @@ inline void print_decimal(const uint8_t x, const uint8_t y, const uint8_t *p)
 void print_date(void)
 {
     gotoxy(5,16);
-    puts("2025-10-15");
+    puts("2025-10-17");
 }
 
 void main(void)
@@ -177,9 +164,6 @@ void main(void)
         10,9,19,17, 0,0,0,0,0,0,0,0,0,0,0,0
     };
 
-    // Font tiles are loaded in by GBDK. That is most of what is needed, but there are a few more to load.
-    static const uint8_t const colortile[] = {0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0, 0xff, 0};
-    static const unsigned char markertile[] = {0x10,0x10,0x18,0x18,0x1C,0x1C,0x1E,0x1E,0x1C,0x1C,0x18,0x18,0x10,0x10,0x00,0x00};
     // Locations for the different info to print.
     static const uint8_t const loc_x[] = {1, 11, 1, 11}; //hex rgb components
     static const uint8_t const loc_y[] = {1, 1, 10, 10};
@@ -199,16 +183,13 @@ void main(void)
     static bool color_changed_all = true;
     static uint8_t i, j;
     static uint8_t *p;
+    static uint16_t new_text_color;
 
     // Display mode: HTML color code style hex digits or RGB decimal components.
     static uint8_t mode;
 
     // Used to save/restore the selected value when pressing A or B.
     static uint5_t backup_component;
-
-	// Load a tile of solid color 1 for the background to avoid the SGB shared color.
-    set_bkg_data(TILE_ID_COLOR, 1, colortile);
-    set_bkg_data(TILE_ID_MARKER, 1, markertile);
 
     // Turn everything on. Sprites are not used.
     SHOW_BKG;
@@ -220,16 +201,16 @@ void main(void)
         sgb = sgb_check();
     }
 
+    // Start menu black text on white bg
+    set_bkg_palette_entry(0, 2, RGB_WHITE);
+    set_bkg_palette_entry(0, 3, RGB_BLACK);
+
     // Supports GBC, GBA, and SGB
     if (!DEVICE_SUPPORTS_COLOR && !sgb) {
         puts("\n\n  GB Color Picker\n  does not run\n  in B&W. Sorry!");
         print_date();
         return;
     }
-
-    // Start menu black text on white bg
-    set_bkg_palette_entry(0, 2, RGB_WHITE);
-    set_bkg_palette_entry(0, 3, RGB_BLACK);
     
     // Check whether SRAM is valid
     ENABLE_RAM;
@@ -247,12 +228,16 @@ void main(void)
     } while (joypad() == 0);
     wait(12);
 
+    
+	// Overwrite GBDK font tiles with color 1 for the background to avoid the SGB shared color.
+    // Unoptimized: 2x font tiles in ROM(GBDK + color1 as background)
+    set_bkg_data(0, font_TILE_COUNT, font_tiles);
+
     // clear screen.
     cls();
 
     initrand(clock());
     
-    adjust_text_backgrounds();
     // adjust text color
 	set_bkg_palette_entry(0, 3, text_color(0));
 	set_bkg_palette_entry(1, 3, text_color(1));
@@ -305,7 +290,35 @@ void main(void)
             }
 			
 			// text color
-			set_bkg_palette_entry(i, 3, text_color(i));
+            new_text_color = text_color(i);
+			set_bkg_palette_entry(i, 3, new_text_color);
+            // sgb 4th colors
+            switch (i)
+            {
+                case 0:
+                    sgb_pal01[7] = new_text_color & 0xff;
+                    sgb_pal01[8] = (new_text_color >> 8) & 0xff;
+                break;
+                
+                case 1:
+                    sgb_pal01[13] = new_text_color & 0xff;
+                    sgb_pal01[14] = (new_text_color >> 8) & 0xff;
+                break;
+
+                case 2:
+                    sgb_pal23[7] = new_text_color & 0xff;
+                    sgb_pal23[8] = (new_text_color >> 8) & 0xff;
+                break;
+                
+                case 3:
+                    sgb_pal23[13] = new_text_color & 0xff;
+                    sgb_pal23[14] = (new_text_color >> 8) & 0xff;
+                break;
+
+                default:
+                break;
+            }
+
         }
 
         if (color_changed_selected || color_changed_all) {
@@ -341,11 +354,9 @@ void main(void)
                     set_bkg_palette_entry(PALETTE_COLOR_3, 1, raw_colors[2]);
                     set_bkg_palette_entry(PALETTE_COLOR_4, 1, raw_colors[3]);
                 } else {
-                    // Set the newly calculated color into the first and second entries of a palette.
-                    // Using the second entry because of SGB transparency. First for the text background.
+                    // Set the newly calculated color into the second entry of a palette.
+                    // Using the second entry because of SGB transparency.
                     set_bkg_palette_entry(PALETTE_COLOR_1 + selected_color, 1, raw_colors[selected_color]);
-					set_bkg_palette_entry(PALETTE_COLOR_1 + selected_color, 0, raw_colors[selected_color]);
-                    // TODO: SGB 3rd color bg font, set_bkg_palette_entry(PALETTE_COLOR_1 + selected_color, 2, raw_colors[selected_color]);
                 }
             }
         }
@@ -503,7 +514,6 @@ void main(void)
 				};
 
                 loadColorsFromPalette(rand_pal);
-				adjust_text_backgrounds();
 
 				color_changed_all = true;
 				color_changed_selected = true;

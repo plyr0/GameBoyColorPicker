@@ -21,11 +21,17 @@ CSOURCES   := $(wildcard *.c)
 
 all:	$(BINS)
 
+font.c font.h: font.png
+	$(GBDK_HOME)/bin/png2asset.exe ./font.png -spr8x8 -sprite_no_optimize -keep_palette_order -noflip -max_palettes 1 -tiles_only -no_palettes
+
+font.o:	font.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 %.o:	%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(PROJECTNAME).gb:	gbcolorpicker.o
-	$(CC) $(CFLAGS) -Wm-yn"$(PROJECTNAME)" -o $@ $<
+$(PROJECTNAME).gb:	gbcolorpicker.o font.o
+	$(CC) $(CFLAGS) -Wm-yn"$(PROJECTNAME)" -o $@ $^
 
 clean:
-	rm -f *.o *.lst *.map *.gb *.ihx *.sym *.cdb *.adb *.asm
+	rm -f *.o *.lst *.map *.gb *.ihx *.sym *.cdb *.adb *.asm *.noi
