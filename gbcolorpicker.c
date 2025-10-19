@@ -20,12 +20,12 @@
 #define TILE_ID_MARKER 0x67U
 
 typedef uint8_t uint5_t;
-#define UINT5_MIN (0x00U)
-#define UINT5_MAX (0x1fU)
+#define UINT5_MIN  (0x00U)
+#define UINT5_MAX  (0x1fU)
+#define UINT5_HALF (0x0fU)
 
 // Turns a five bit color value into an eight bit color value by repeating the
 // three most significant bits in the three least.
-// TODO: wouldn't be enough ((byte) << 3))
 #define EXTEND(byte) ((byte) << 3) | ((byte) >> 2)
 
 // Set default colors
@@ -41,9 +41,7 @@ palette_color_t raw_colors[4];
 // return black if background color is light, white otherwise
 uint16_t text_color (uint8_t bg)
 {
-	// https://stackoverflow.com/a/946734
-	const uint16_t gray = colors[bg][0] * 10 / 3 + colors[bg][1] * 10 / 6 + colors[bg][2] / 10;
-	return (gray > 23 ? RGB_BLACK : RGB_WHITE); // 186/256, is like 23/32(5bit)
+    return (colors[bg][0] + colors[bg][1] + colors[bg][2] > 3 * UINT5_HALF ? RGB_BLACK : RGB_WHITE);
 }
 
 // Load a palette of four colors into the raw_colors array and the colors array.
@@ -124,7 +122,7 @@ inline void print_decimal(const uint8_t x, const uint8_t y, const uint8_t *p)
 
     for (i = 0; i < 3; i++) {
         // Extend from 5 bit to 8 bit and store as 16 bit for BCD.
-        extended = (p[i] << 3) | (p[i] >> 2);
+        extended = EXTEND(p[i]);
 
         // Built in BCD conversion is for uint16_t so this is a little inefficient.
         uint2bcd(extended, &bcd);
@@ -143,7 +141,7 @@ inline void print_decimal(const uint8_t x, const uint8_t y, const uint8_t *p)
 void print_date(void)
 {
     gotoxy(5,16);
-    puts("2025-10-17");
+    puts("2025-10-19");
 }
 
 void main(void)
@@ -228,16 +226,15 @@ void main(void)
     } while (joypad() == 0);
     wait(12);
 
-    
-	// Overwrite GBDK font tiles with color 1 for the background to avoid the SGB shared color.
-    // Unoptimized: 2x font tiles in ROM(GBDK + color1 as background)
+	// Overwrite GBDK font tiles with ones with the background in second color
+    // to avoid the SGB shared color. Unoptimized: 2x font tiles in ROM(GBDK + color1 as background)
     set_bkg_data(0, font_TILE_COUNT, font_tiles);
 
     // clear screen.
     cls();
 
     initrand(clock());
-    
+
     // adjust text color
 	set_bkg_palette_entry(0, 3, text_color(0));
 	set_bkg_palette_entry(1, 3, text_color(1));
@@ -318,7 +315,6 @@ void main(void)
                 default:
                 break;
             }
-
         }
 
         if (color_changed_selected || color_changed_all) {
@@ -505,16 +501,8 @@ void main(void)
             break;
 
             case J_SELECT:
-                // Randomize colors, randw doesn't randomize MSB
-				palette_color_t rand_pal[4] = {
-                    (rand() | rand() << 8),
-                    (rand() | rand() << 8),
-                    (rand() | rand() << 8),
-                    (rand() | rand() << 8),
-				};
-
+				palette_color_t rand_pal[4] = {randw(), randw(), randw(), randw()};
                 loadColorsFromPalette(rand_pal);
-
 				color_changed_all = true;
 				color_changed_selected = true;
             break;
